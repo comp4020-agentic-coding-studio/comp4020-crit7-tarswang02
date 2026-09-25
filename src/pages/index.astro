@@ -198,78 +198,110 @@ const deadlines = listDeadlines();
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(width, height);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
         el.append(renderer.domElement);
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-        camera.position.set(0, 0.1, 4.6);
+        const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
+        camera.position.set(0, 0.05, 4.7);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const key = new THREE.DirectionalLight(0xffffff, 0.9);
-        key.position.set(2, 3, 4);
+        // Warm lighting only — this sits inside the ink-and-parchment
+        // frame (see .hourglass-frame in styles.css), so no cool/blue
+        // light is used anywhere, even for the fill/rim.
+        scene.add(new THREE.AmbientLight(0xfff1de, 0.6));
+        const key = new THREE.DirectionalLight(0xfff4e0, 1.15);
+        key.position.set(2.3, 3, 3.2);
         scene.add(key);
+        const fill = new THREE.DirectionalLight(0xf0e3c8, 0.35);
+        fill.position.set(-2.6, -1, -2.4);
+        scene.add(fill);
 
         const group = new THREE.Group();
         scene.add(group);
 
-        const bulbRadius = 0.9;
-        const bulbHeight = 1.1;
+        // The bulb silhouette is a single lathed profile (one continuous
+        // curve from bottom plate to top plate, pinched at the waist)
+        // rather than two cones butted against a cylinder neck — that's
+        // what was reading as lumpy/cartoonish. `shapeR` stays narrow near
+        // the neck and flares only near the plates, which is what gives a
+        // real hourglass its pinched-waist look instead of a straight
+        // taper.
+        const halfHeight = 1.05;
+        const bulbRadius = 0.82;
+        const neckRadius = 0.09;
+        const discThickness = 0.09;
 
-        const glassMaterial = new THREE.MeshStandardMaterial({
-          color: 0xdfeeff,
+        function shapeR(absY: number) {
+          const t = Math.min(absY / halfHeight, 1);
+          return neckRadius + (bulbRadius - neckRadius) * Math.pow(t, 1.7);
+        }
+
+        const profileSteps = 32;
+        const profile: THREE.Vector2[] = [];
+        for (let i = 0; i <= profileSteps; i++) {
+          const y = -halfHeight + (2 * halfHeight * i) / profileSteps;
+          profile.push(new THREE.Vector2(shapeR(Math.abs(y)), y));
+        }
+
+        const glassMaterial = new THREE.MeshPhysicalMaterial({
+          color: 0xfff6e6,
           transparent: true,
-          opacity: 0.28,
-          roughness: 0.15,
-          metalness: 0.05,
+          opacity: 0.3,
+          roughness: 0.08,
+          metalness: 0,
+          clearcoat: 1,
+          clearcoatRoughness: 0.12,
+          ior: 1.45,
           side: THREE.DoubleSide,
         });
-        const frameMaterial = new THREE.MeshStandardMaterial({
-          color: 0xb8860b,
-          metalness: 0.75,
-          roughness: 0.35,
+        const woodMaterial = new THREE.MeshStandardMaterial({
+          color: 0x5c3a21,
+          roughness: 0.75,
+          metalness: 0,
+        });
+        const brassMaterial = new THREE.MeshStandardMaterial({
+          color: 0xa8720f,
+          metalness: 0.7,
+          roughness: 0.3,
         });
         const sandMaterial = new THREE.MeshStandardMaterial({
-          color: 0xdcb35c,
-          roughness: 0.9,
+          color: 0xc9973f,
+          roughness: 0.85,
+          metalness: 0,
         });
 
-        const topGlass = new THREE.Mesh(
-          new THREE.ConeGeometry(bulbRadius, bulbHeight, 24, 1, true),
+        const glass = new THREE.Mesh(
+          new THREE.LatheGeometry(profile, 40),
           glassMaterial,
         );
-        topGlass.rotation.x = Math.PI;
-        topGlass.position.y = bulbHeight / 2;
-        group.add(topGlass);
+        group.add(glass);
 
-        const bottomGlass = new THREE.Mesh(
-          new THREE.ConeGeometry(bulbRadius, bulbHeight, 24, 1, true),
-          glassMaterial,
-        );
-        bottomGlass.position.y = -bulbHeight / 2;
-        group.add(bottomGlass);
-
-        const neck = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.08, 0.08, 0.14, 16),
-          frameMaterial,
-        );
-        group.add(neck);
-
-        for (const y of [bulbHeight, -bulbHeight]) {
-          const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(bulbRadius, 0.05, 8, 24),
-            frameMaterial,
+        for (const y of [halfHeight + discThickness / 2, -halfHeight - discThickness / 2]) {
+          const disc = new THREE.Mesh(
+            new THREE.CylinderGeometry(bulbRadius * 1.08, bulbRadius * 1.08, discThickness, 32),
+            woodMaterial,
           );
-          ring.rotation.x = Math.PI / 2;
-          ring.position.y = y;
-          group.add(ring);
+          disc.position.y = y;
+          group.add(disc);
         }
+
+        const collar = new THREE.Mesh(
+          new THREE.TorusGeometry(neckRadius + 0.025, 0.03, 8, 24),
+          brassMaterial,
+        );
+        collar.rotation.x = Math.PI / 2;
+        group.add(collar);
+
+        const rodLength = 2 * halfHeight + 2 * discThickness;
+        const rodRadius = bulbRadius * 1.08;
         for (let i = 0; i < 3; i++) {
           const angle = (i / 3) * Math.PI * 2;
           const rod = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.05, 0.05, bulbHeight * 2, 8),
-            frameMaterial,
+            new THREE.CylinderGeometry(0.045, 0.045, rodLength, 12),
+            brassMaterial,
           );
-          rod.position.set(Math.cos(angle) * bulbRadius, 0, Math.sin(angle) * bulbRadius);
+          rod.position.set(Math.cos(angle) * rodRadius, 0, Math.sin(angle) * rodRadius);
           group.add(rod);
         }
 
@@ -277,39 +309,67 @@ const deadlines = listDeadlines();
         // local y=0 so that scaling along y grows it from that anchor
         // rather than from its own center — the bottom pile rises from the
         // base, the top pile drains down toward the neck.
-        const bottomSandGeometry = new THREE.ConeGeometry(
-          bulbRadius * 0.88,
-          bulbHeight * 0.95,
-          20,
-        );
-        bottomSandGeometry.translate(0, (bulbHeight * 0.95) / 2, 0);
+        const pileHeight = halfHeight * 0.92;
+        const pileRadius = bulbRadius * 0.8;
+
+        const bottomSandGeometry = new THREE.ConeGeometry(pileRadius, pileHeight, 20);
+        bottomSandGeometry.translate(0, pileHeight / 2, 0);
         const bottomSand = new THREE.Mesh(bottomSandGeometry, sandMaterial);
-        bottomSand.position.y = -bulbHeight;
+        bottomSand.position.y = -halfHeight;
         group.add(bottomSand);
 
-        const topSandGeometry = new THREE.ConeGeometry(
-          bulbRadius * 0.88,
-          bulbHeight * 0.95,
-          20,
-        );
-        topSandGeometry.translate(0, -(bulbHeight * 0.95) / 2, 0);
+        const topSandGeometry = new THREE.ConeGeometry(pileRadius, pileHeight, 20);
+        topSandGeometry.translate(0, -pileHeight / 2, 0);
         const topSand = new THREE.Mesh(topSandGeometry, sandMaterial);
         topSand.rotation.x = Math.PI;
         group.add(topSand);
+
+        // Thin falling stream at the neck, faded in/out by how fast the
+        // level is currently changing so it reads as a trickle rather
+        // than a static rod.
+        const stream = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.018, 0.018, discThickness * 1.4, 8),
+          sandMaterial,
+        );
+        stream.material = (stream.material as THREE.MeshStandardMaterial).clone();
+        (stream.material as THREE.MeshStandardMaterial).transparent = true;
+        group.add(stream);
 
         group.rotation.z = 0.05;
 
         const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-        function render(fraction: number, rotationY: number) {
+        // Quintic smootherstep: zero first *and* second derivative at
+        // both ends, so the pour eases in and out instead of snapping to
+        // a stop — a plain cosine ease still has visible velocity at the
+        // turnaround.
+        function smootherstep(t: number) {
+          return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+
+        // Maps a linear cycle position (0..1..0 over one period) to a fill
+        // fraction, easing each half with smootherstep instead of cosine.
+        function cycleFraction(phase: number) {
+          return phase < 0.5
+            ? smootherstep(phase * 2)
+            : 1 - smootherstep((phase - 0.5) * 2);
+        }
+
+        function render(phase: number, rotationY: number) {
+          const fraction = cycleFraction(phase);
+          const dt = 0.0015;
+          const rate = Math.abs(cycleFraction(Math.min(phase + dt, 1)) - fraction) / dt;
+
           bottomSand.scale.y = Math.max(fraction, 0.001);
           topSand.scale.y = Math.max(1 - fraction, 0.001);
+          (stream.material as THREE.MeshStandardMaterial).opacity = Math.min(rate * 0.6, 1);
+
           group.rotation.y = rotationY;
           renderer.render(scene, camera);
         }
 
         if (reduceMotion) {
-          render(0.5, 0);
+          render(0.25, 0);
           return;
         }
 
@@ -317,9 +377,8 @@ const deadlines = listDeadlines();
         let rafId = 0;
 
         function tick(now: number) {
-          const t = (now % periodMs) / periodMs;
-          const fraction = (1 - Math.cos(t * Math.PI * 2)) / 2;
-          render(fraction, now * 0.00025);
+          const phase = (now % periodMs) / periodMs;
+          render(phase, now * 0.00018);
           rafId = requestAnimationFrame(tick);
         }
 
