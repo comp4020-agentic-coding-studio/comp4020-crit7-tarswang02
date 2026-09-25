@@ -13,51 +13,86 @@ const deadlines = listDeadlines();
     <title>Deadline tracker</title>
   </head>
   <body>
-    <nav aria-label="site">
-      <a href="/">Deadlines</a>
-      <a href="/readme/">About</a>
-    </nav>
-    <main>
+    <header class="site-header">
+      <nav class="container" aria-label="site">
+        <a href="/" class="active">Deadlines</a>
+        <a href="/readme/">About</a>
+      </nav>
+    </header>
+    <main class="app-main container">
       <div class="hero">
-        <h1>Deadline tracker</h1>
-        <div id="hourglass-3d" class="hourglass-3d" aria-hidden="true"></div>
+        <div class="hero-copy">
+          <h1>Deadline tracker</h1>
+          <p class="subtitle">
+            One shared list of assignment and crit deadlines across courses —
+            add one, and it's there for anyone with the link, in every open
+            tab, without a reload. Overdue, not-done items are flagged.
+          </p>
+        </div>
+        <div class="hourglass-frame">
+          <div id="hourglass-3d" class="hourglass-3d" aria-hidden="true"></div>
+        </div>
       </div>
-      <p>
-        One shared list of assignment and crit deadlines across courses —
-        add one, and it's there for anyone with the link, in every open tab,
-        without a reload. Overdue, not-done items are flagged.
-      </p>
-      <form method="post" action="/api/deadlines">
-        <label for="title">Title</label>
-        <input id="title" name="title" required maxlength="200" placeholder="Crit 7" />
-        <label for="course">Course</label>
-        <input id="course" name="course" required maxlength="100" placeholder="COMP4020" />
-        <label for="dueAt">Due date</label>
-        <input id="dueAt" name="dueAt" type="date" required />
-        <label for="weightPercent">Weight %</label>
-        <input id="weightPercent" name="weightPercent" type="number" min="0" max="100" />
-        <button>Add</button>
-      </form>
-      <ul id="deadlines">
-        {
-          deadlines.map((deadline) => (
-            <li
-              data-id={deadline.id}
-              class:list={{ overdue: isOverdue(deadline), done: deadline.done }}
-            >
-              <span class="deadline-title">{deadline.title}</span>
-              <span class="deadline-course">{deadline.course}</span>
-              <span class="deadline-due">{deadline.dueAt}</span>
-              {deadline.weightPercent != null && (
-                <span class="deadline-weight">{deadline.weightPercent}%</span>
-              )}
-              <form method="post" action={`/api/deadlines/${deadline.id}/toggle`}>
-                <button>{deadline.done ? "Mark not done" : "Mark done"}</button>
-              </form>
-            </li>
-          ))
-        }
-      </ul>
+
+      <section class="card" aria-labelledby="add-heading">
+        <h2 id="add-heading">Add a deadline</h2>
+        <form method="post" action="/api/deadlines" class="add-form">
+          <div class="field">
+            <label for="title">Title</label>
+            <input id="title" name="title" required maxlength="200" placeholder="Crit 7" />
+          </div>
+          <div class="field">
+            <label for="course">Course</label>
+            <input id="course" name="course" required maxlength="100" placeholder="COMP4020" />
+          </div>
+          <div class="field">
+            <label for="dueAt">Due date</label>
+            <input id="dueAt" name="dueAt" type="date" required />
+          </div>
+          <div class="field field-weight">
+            <label for="weightPercent">Weight %</label>
+            <input id="weightPercent" name="weightPercent" type="number" min="0" max="100" />
+          </div>
+          <button class="btn-primary">Add deadline</button>
+        </form>
+      </section>
+
+      <section class="list-section" aria-labelledby="list-heading">
+        <h2 id="list-heading">Upcoming</h2>
+        <ul id="deadlines">
+          {
+            deadlines.length === 0 && (
+              <li class="empty-state">No deadlines yet — add the first one above.</li>
+            )
+          }
+          {
+            deadlines.map((deadline) => (
+              <li
+                data-id={deadline.id}
+                class:list={{ overdue: isOverdue(deadline), done: deadline.done }}
+              >
+                <div class="deadline-main">
+                  <span class="deadline-title">{deadline.title}</span>
+                  <span class="deadline-course">{deadline.course}</span>
+                </div>
+                <div class="deadline-meta">
+                  <span class="deadline-due">{deadline.dueAt}</span>
+                  {deadline.weightPercent != null && (
+                    <span class="deadline-weight">{deadline.weightPercent}%</span>
+                  )}
+                </div>
+                <form
+                  method="post"
+                  action={`/api/deadlines/${deadline.id}/toggle`}
+                  class="toggle-form"
+                >
+                  <button>{deadline.done ? "Mark not done" : "Mark done"}</button>
+                </form>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
     </main>
     <script>
       // The live half of the tracker: subscribe to the SSE stream and keep
@@ -81,31 +116,42 @@ const deadlines = listDeadlines();
         li.dataset.id = String(deadline.id);
         applyState(li, deadline);
 
+        const main = document.createElement("div");
+        main.className = "deadline-main";
+
         const title = document.createElement("span");
         title.className = "deadline-title";
         title.textContent = deadline.title;
-        li.append(title);
+        main.append(title);
 
         const course = document.createElement("span");
         course.className = "deadline-course";
         course.textContent = deadline.course;
-        li.append(course);
+        main.append(course);
+
+        li.append(main);
+
+        const meta = document.createElement("div");
+        meta.className = "deadline-meta";
 
         const due = document.createElement("span");
         due.className = "deadline-due";
         due.textContent = deadline.dueAt;
-        li.append(due);
+        meta.append(due);
 
         if (deadline.weightPercent != null) {
           const weight = document.createElement("span");
           weight.className = "deadline-weight";
           weight.textContent = `${deadline.weightPercent}%`;
-          li.append(weight);
+          meta.append(weight);
         }
+
+        li.append(meta);
 
         const form = document.createElement("form");
         form.method = "post";
         form.action = `/api/deadlines/${deadline.id}/toggle`;
+        form.className = "toggle-form";
         const button = document.createElement("button");
         button.textContent = deadline.done ? "Mark not done" : "Mark done";
         form.append(button);
@@ -122,6 +168,7 @@ const deadlines = listDeadlines();
 
       source.addEventListener("deadline-added", (event) => {
         const deadline = JSON.parse(event.data);
+        list?.querySelector(".empty-state")?.remove();
         list?.append(row(deadline));
       });
 
