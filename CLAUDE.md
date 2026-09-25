@@ -71,6 +71,34 @@ If a future me is tempted to extend this into more 3D chrome elsewhere on
 the page: don't, without a fresh explicit ask — this was scoped as a
 single decorative accent, not a redesign.
 
+## Visual design: ink-and-parchment editorial system
+
+The starter's bare `system-ui` styling was deliberately replaced with a
+real typographic and color system, not just a palette swap:
+
+- **Fraunces** (a warm, characterful display serif) for `h1`/`h2`, paired
+  with **Work Sans** for body/UI text — loaded via `@import` at the top of
+  `src/styles.css` so both pages pick it up from one place, with a system
+  serif/sans fallback stack if the Google Fonts request is blocked.
+- **Palette is warm parchment + near-black ink + a gold accent**
+  (`--paper`, `--ink`, `--accent` in `src/styles.css`), chosen to tie
+  directly into the hourglass's existing sand (`0xdcb35c`) and brass frame
+  (`0xb8860b`) colors from the Three.js experiment above, so the two
+  additions read as one considered product rather than two unrelated
+  layers. The hourglass itself was repositioned into a rounded "display
+  case" frame (`.hourglass-frame`) in the hero instead of sitting bare
+  next to the `h1`.
+- **Cards + a colored left-bar status indicator** replace the old flat
+  list: `.card` for the add-form and `#deadlines li`, with the bar color
+  keyed off `.overdue`/`.done` (see the `#deadlines li::before` rules).
+  Contrast was eyeballed by hand at both ~1920px and ~390px — `color-contrast`
+  is disabled in `spec/invariants.test.ts`'s jsdom-based axe run, so nothing
+  automated catches a bad ratio here.
+- Every id/class the specs or the SSE row-builder script in `index.astro`
+  depend on (`#deadlines`, `data-id`, `.deadline-title`/`-course`/`-due`/
+  `-weight`, `.overdue`/`.done`) was kept exactly; only the surrounding
+  wrapper markup and CSS changed.
+
 ## Non-goals
 
 - No accounts, no login, no per-user data — it's one shared list, by design.
