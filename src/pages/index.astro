@@ -1,8 +1,8 @@
 ---
-import { listMessages } from "../lib/db";
+import { isOverdue, listDeadlines } from "../lib/db";
 import "../styles.css";
 
-const messages = listMessages();
+const deadlines = listDeadlines();
 ---
 
 <!doctype html>
@@ -10,43 +10,125 @@ const messages = listMessages();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 prototype</title>
+    <title>Deadline tracker</title>
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/">Guestbook</a>
+      <a href="/">Deadlines</a>
       <a href="/readme/">About</a>
     </nav>
     <main>
-      <h1>Guestbook</h1>
+      <h1>Deadline tracker</h1>
       <p>
-        A minimal full-stack starter: messages live in SQLite on the machine's
-        volume (state survives a reload and a redeploy), and new messages
-        appear in every open tab over a server-sent-events stream — open this
-        page twice and sign it in one. Replace all of this with your own
-        prototype.
+        One shared list of assignment and crit deadlines across courses —
+        add one, and it's there for anyone with the link, in every open tab,
+        without a reload. Overdue, not-done items are flagged.
       </p>
-      <form method="post" action="/api/messages">
-        <label for="body">Leave a message</label>
-        <input id="body" name="body" required maxlength="500" />
-        <button>Sign</button>
+      <form method="post" action="/api/deadlines">
+        <label for="title">Title</label>
+        <input id="title" name="title" required maxlength="200" placeholder="Crit 7" />
+        <label for="course">Course</label>
+        <input id="course" name="course" required maxlength="100" placeholder="COMP4020" />
+        <label for="dueAt">Due date</label>
+        <input id="dueAt" name="dueAt" type="date" required />
+        <label for="weightPercent">Weight %</label>
+        <input id="weightPercent" name="weightPercent" type="number" min="0" max="100" />
+        <button>Add</button>
       </form>
-      <ul id="messages">
-        {messages.map((message) => <li>{message.body}</li>)}
+      <ul id="deadlines">
+        {
+          deadlines.map((deadline) => (
+            <li
+              data-id={deadline.id}
+              class:list={{ overdue: isOverdue(deadline), done: deadline.done }}
+            >
+              <span class="deadline-title">{deadline.title}</span>
+              <span class="deadline-course">{deadline.course}</span>
+              <span class="deadline-due">{deadline.dueAt}</span>
+              {deadline.weightPercent != null && (
+                <span class="deadline-weight">{deadline.weightPercent}%</span>
+              )}
+              <form method="post" action={`/api/deadlines/${deadline.id}/toggle`}>
+                <button>{deadline.done ? "Mark not done" : "Mark done"}</button>
+              </form>
+            </li>
+          ))
+        }
       </ul>
     </main>
     <script>
-      // The live half of the demo: subscribe to the SSE stream and prepend
-      // messages as they arrive. The form itself needs none of this — its
-      // POST + redirect re-renders the submitting tab from SQLite; this
-      // stream is how every other tab finds out.
-      const list = document.querySelector("#messages");
+      // The live half of the tracker: subscribe to the SSE stream and keep
+      // the list in sync. The forms themselves need none of this — POST +
+      // redirect re-renders the submitting tab from SQLite; this stream is
+      // how every other tab finds out.
+      interface DeadlineJSON {
+        id: number;
+        title: string;
+        course: string;
+        dueAt: string;
+        weightPercent: number | null;
+        done: boolean;
+      }
+
+      const list = document.querySelector("#deadlines");
       const source = new EventSource("/api/events");
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        const item = document.createElement("li");
-        item.textContent = message.body;
-        list?.prepend(item);
+
+      function row(deadline: DeadlineJSON) {
+        const li = document.createElement("li");
+        li.dataset.id = String(deadline.id);
+        applyState(li, deadline);
+
+        const title = document.createElement("span");
+        title.className = "deadline-title";
+        title.textContent = deadline.title;
+        li.append(title);
+
+        const course = document.createElement("span");
+        course.className = "deadline-course";
+        course.textContent = deadline.course;
+        li.append(course);
+
+        const due = document.createElement("span");
+        due.className = "deadline-due";
+        due.textContent = deadline.dueAt;
+        li.append(due);
+
+        if (deadline.weightPercent != null) {
+          const weight = document.createElement("span");
+          weight.className = "deadline-weight";
+          weight.textContent = `${deadline.weightPercent}%`;
+          li.append(weight);
+        }
+
+        const form = document.createElement("form");
+        form.method = "post";
+        form.action = `/api/deadlines/${deadline.id}/toggle`;
+        const button = document.createElement("button");
+        button.textContent = deadline.done ? "Mark not done" : "Mark done";
+        form.append(button);
+        li.append(form);
+
+        return li;
+      }
+
+      function applyState(li: HTMLLIElement, deadline: DeadlineJSON) {
+        const today = new Date().toISOString().slice(0, 10);
+        li.classList.toggle("done", deadline.done);
+        li.classList.toggle("overdue", !deadline.done && deadline.dueAt < today);
+      }
+
+      source.addEventListener("deadline-added", (event) => {
+        const deadline = JSON.parse(event.data);
+        list?.append(row(deadline));
+      });
+
+      source.addEventListener("deadline-toggled", (event) => {
+        const deadline: DeadlineJSON = JSON.parse(event.data);
+        const li = list?.querySelector<HTMLLIElement>(`li[data-id="${deadline.id}"]`);
+        if (!li) return;
+        applyState(li, deadline);
+        const button = li.querySelector("button");
+        if (button) button.textContent = deadline.done ? "Mark not done" : "Mark done";
       });
     </script>
   </body>

@@ -7,12 +7,21 @@ import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 // boots (see src/lib/db.ts), locally and deployed. Never edit the database
 // by hand: state on the deployed volume outlives every deploy, and the
 // migration trail is what keeps old state and new code compatible.
-export const messages = sqliteTable("messages", {
+
+// dueAt is a plain YYYY-MM-DD date, not a datetime: the deployed machine and
+// the student don't share a timezone, and comparing it lexically against
+// today's ISO date (see isOverdue in db.ts) avoids ever parsing a Date or
+// caring what timezone anything is in.
+export const deadlines = sqliteTable("deadlines", {
   id: int().primaryKey({ autoIncrement: true }),
-  body: text().notNull(),
+  title: text().notNull(),
+  course: text().notNull(),
+  dueAt: text("due_at").notNull(),
+  weightPercent: int("weight_percent"),
+  done: int({ mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),
 });
 
-export type Message = typeof messages.$inferSelect;
+export type Deadline = typeof deadlines.$inferSelect;

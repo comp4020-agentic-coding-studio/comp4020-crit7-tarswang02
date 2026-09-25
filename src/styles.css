@@ -35,6 +35,46 @@ button {
   font: inherit;
 }
 
-#messages {
-  padding-inline-start: 1.2rem;
+#deadlines {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+#deadlines li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #ddd;
+}
+
+#deadlines li form {
+  margin: 0;
+}
+
+.deadline-title {
+  font-weight: 600;
+}
+
+.deadline-course {
+  color: #555;
+}
+
+.overdue {
+  color: #b3261e;
+}
+
+.overdue .deadline-title::after {
+  content: " (overdue)";
+  font-weight: 400;
+  font-size: 0.9em;
+}
+
+.done {
+  opacity: 0.6;
+}
+
+.done .deadline-title {
+  text-decoration: line-through;
 }
