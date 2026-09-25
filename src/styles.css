@@ -15,6 +15,27 @@ a {
   color: #0b5fff;
 }
 
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hero h1 {
+  margin: 0;
+}
+
+.hourglass-3d {
+  width: 88px;
+  height: 112px;
+  flex-shrink: 0;
+}
+
+.hourglass-3d canvas {
+  display: block;
+}
+
 form {
   display: flex;
   flex-wrap: wrap;

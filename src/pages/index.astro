@@ -18,7 +18,10 @@ const deadlines = listDeadlines();
       <a href="/readme/">About</a>
     </nav>
     <main>
-      <h1>Deadline tracker</h1>
+      <div class="hero">
+        <h1>Deadline tracker</h1>
+        <div id="hourglass-3d" class="hourglass-3d" aria-hidden="true"></div>
+      </div>
       <p>
         One shared list of assignment and crit deadlines across courses —
         add one, and it's there for anyone with the link, in every open tab,
@@ -130,6 +133,168 @@ const deadlines = listDeadlines();
         const button = li.querySelector("button");
         if (button) button.textContent = deadline.done ? "Mark not done" : "Mark done";
       });
+    </script>
+    <script>
+      // Purely decorative: a small rotating 3D hourglass next to the title.
+      // aria-hidden on the container (see the markup above) takes it out of
+      // the accessibility tree entirely, so nothing here can ever compete
+      // with the real semantic content or trip the axe check in
+      // spec/invariants.test.ts. See CLAUDE.md for the fuller rationale.
+      import * as THREE from "three";
+
+      const container = document.querySelector<HTMLDivElement>("#hourglass-3d");
+
+      function initHourglass(el: HTMLDivElement) {
+        const width = el.clientWidth || 88;
+        const height = el.clientHeight || 112;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(width, height);
+        el.append(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+        camera.position.set(0, 0.1, 4.6);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const key = new THREE.DirectionalLight(0xffffff, 0.9);
+        key.position.set(2, 3, 4);
+        scene.add(key);
+
+        const group = new THREE.Group();
+        scene.add(group);
+
+        const bulbRadius = 0.9;
+        const bulbHeight = 1.1;
+
+        const glassMaterial = new THREE.MeshStandardMaterial({
+          color: 0xdfeeff,
+          transparent: true,
+          opacity: 0.28,
+          roughness: 0.15,
+          metalness: 0.05,
+          side: THREE.DoubleSide,
+        });
+        const frameMaterial = new THREE.MeshStandardMaterial({
+          color: 0xb8860b,
+          metalness: 0.75,
+          roughness: 0.35,
+        });
+        const sandMaterial = new THREE.MeshStandardMaterial({
+          color: 0xdcb35c,
+          roughness: 0.9,
+        });
+
+        const topGlass = new THREE.Mesh(
+          new THREE.ConeGeometry(bulbRadius, bulbHeight, 24, 1, true),
+          glassMaterial,
+        );
+        topGlass.rotation.x = Math.PI;
+        topGlass.position.y = bulbHeight / 2;
+        group.add(topGlass);
+
+        const bottomGlass = new THREE.Mesh(
+          new THREE.ConeGeometry(bulbRadius, bulbHeight, 24, 1, true),
+          glassMaterial,
+        );
+        bottomGlass.position.y = -bulbHeight / 2;
+        group.add(bottomGlass);
+
+        const neck = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.08, 0.08, 0.14, 16),
+          frameMaterial,
+        );
+        group.add(neck);
+
+        for (const y of [bulbHeight, -bulbHeight]) {
+          const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(bulbRadius, 0.05, 8, 24),
+            frameMaterial,
+          );
+          ring.rotation.x = Math.PI / 2;
+          ring.position.y = y;
+          group.add(ring);
+        }
+        for (let i = 0; i < 3; i++) {
+          const angle = (i / 3) * Math.PI * 2;
+          const rod = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.05, bulbHeight * 2, 8),
+            frameMaterial,
+          );
+          rod.position.set(Math.cos(angle) * bulbRadius, 0, Math.sin(angle) * bulbRadius);
+          group.add(rod);
+        }
+
+        // Sand piles: each cone is built with its fixed (anchor) end at
+        // local y=0 so that scaling along y grows it from that anchor
+        // rather than from its own center — the bottom pile rises from the
+        // base, the top pile drains down toward the neck.
+        const bottomSandGeometry = new THREE.ConeGeometry(
+          bulbRadius * 0.88,
+          bulbHeight * 0.95,
+          20,
+        );
+        bottomSandGeometry.translate(0, (bulbHeight * 0.95) / 2, 0);
+        const bottomSand = new THREE.Mesh(bottomSandGeometry, sandMaterial);
+        bottomSand.position.y = -bulbHeight;
+        group.add(bottomSand);
+
+        const topSandGeometry = new THREE.ConeGeometry(
+          bulbRadius * 0.88,
+          bulbHeight * 0.95,
+          20,
+        );
+        topSandGeometry.translate(0, -(bulbHeight * 0.95) / 2, 0);
+        const topSand = new THREE.Mesh(topSandGeometry, sandMaterial);
+        topSand.rotation.x = Math.PI;
+        group.add(topSand);
+
+        group.rotation.z = 0.05;
+
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        function render(fraction: number, rotationY: number) {
+          bottomSand.scale.y = Math.max(fraction, 0.001);
+          topSand.scale.y = Math.max(1 - fraction, 0.001);
+          group.rotation.y = rotationY;
+          renderer.render(scene, camera);
+        }
+
+        if (reduceMotion) {
+          render(0.5, 0);
+          return;
+        }
+
+        const periodMs = 9000;
+        let rafId = 0;
+
+        function tick(now: number) {
+          const t = (now % periodMs) / periodMs;
+          const fraction = (1 - Math.cos(t * Math.PI * 2)) / 2;
+          render(fraction, now * 0.00025);
+          rafId = requestAnimationFrame(tick);
+        }
+
+        rafId = requestAnimationFrame(tick);
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            cancelAnimationFrame(rafId);
+          } else {
+            rafId = requestAnimationFrame(tick);
+          }
+        });
+      }
+
+      if (container) {
+        try {
+          initHourglass(container);
+        } catch {
+          // No WebGL, or something else went wrong — it's decorative only,
+          // so just leave the container empty rather than break the page.
+        }
+      }
     </script>
   </body>
 </html>

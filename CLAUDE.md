@@ -37,6 +37,40 @@ rules I'm holding the agent to; they're mine, not the template's.
 - Every open tab reflects an add or a toggle from any other tab without a
   reload, over the `/api/events` SSE stream.
 
+## Deliberate experiment: the 3D hourglass by the title
+
+The small rotating hourglass next to the `<h1>` on the index page
+(`src/pages/index.astro`, built with `three` via npm) is a one-off,
+explicitly-requested experiment in Opus's current 3D frontend capability —
+not the start of a "make the site 3D" direction. It's a client-only
+enhancement layered onto the server-rendered page, same idiom as the
+existing SSE `<script>` block below it.
+
+- **It is decorative only, never semantic.** Its container div carries
+  `aria-hidden="true"`, which removes the whole WebGL canvas subtree from
+  the accessibility tree — screen readers never see it, and it can't
+  compete with or duplicate the real content the way an `<img>` with bad
+  alt text could. That's also why `spec/invariants.test.ts`'s axe check
+  stays green: axe skips aria-hidden subtrees.
+- **It can't break the real flow.** It's mounted lazily by a plain
+  `<script>` (no `client:*` Astro directive, no hydration of the actual
+  page), wrapped in try/catch, and degrades to an empty box if WebGL is
+  unavailable. The add/toggle forms are untouched, plain HTML `<form>`
+  POSTs as before.
+- **It respects `prefers-reduced-motion`.** When that media query matches,
+  it renders one static frame instead of looping `requestAnimationFrame`,
+  and the loop pauses on `visibilitychange` regardless, so a backgrounded
+  tab doesn't keep spinning it.
+- **Known cost, accepted deliberately:** `three` adds roughly 130 KB
+  gzipped to the page's client JS. That's the expected floor for using a
+  real WebGL library rather than a CSS/SVG trick, and it's a fixed
+  one-time load — this isn't a mistake to "optimize away" later unless a
+  future decision explicitly revisits whether the experiment stays.
+
+If a future me is tempted to extend this into more 3D chrome elsewhere on
+the page: don't, without a fresh explicit ask — this was scoped as a
+single decorative accent, not a redesign.
+
 ## Non-goals
 
 - No accounts, no login, no per-user data — it's one shared list, by design.
